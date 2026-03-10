@@ -62,7 +62,7 @@ jobs:
         if: steps.check.outputs.refresh == 'true'
         run: |
           curl -f -s -o /tmp/fresh.csv \
-            "https://zapasy.ceskyhokej.cz/admin/schedule/dashboard/export?filter%5Bseason%5D=2025&filter%5BmanagingAuthorities%5D=all&filter%5Bregion%5D=all&filter%5Bteam%5D=all&filter%5BtimeShortcut%5D=this-season&filter%5Bleague%5D=part_3244&filter%5Bnumber%5D=&filter%5Bstadium%5D=all&filter%5Bstate%5D=&filter%5BteamType%5D=all&filter%5Bsort%5D=&filter%5Bdirection%5D=ASC"
+            "https://zapasy.ceskyhokej.cz/admin/schedule/dashboard/export?filter%5Bseason%5D=2025&filter%5BmanagingAuthorities%5D=all&filter%5Bregion%5D=all&filter%5Bteam%5D=all&filter%5BtimeShortcut%5D=this-season&filter%5Bleague%5D=league_101&filter%5Bnumber%5D=&filter%5Bstadium%5D=all&filter%5Bstate%5D=&filter%5BteamType%5D=all&filter%5Bsort%5D=&filter%5Bdirection%5D=ASC"
 
       - name: Commit if CSV changed
         if: steps.check.outputs.refresh == 'true'
