@@ -1,0 +1,82 @@
+name: Update CSV
+
+on:
+  schedule:
+    # Every 5 min during 15:00–22:45 UTC (= 16:00–23:45 CET, covers all ELH games)
+    - cron: '*/5 15-22 * * *'
+  workflow_dispatch: # allow manual trigger from GitHub UI
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check if any game is currently in progress
+        id: check
+        run: |
+          cat > /tmp/check_games.py << 'PYEOF'
+          import re, os
+          from datetime import datetime, timedelta
+
+          try:
+              from zoneinfo import ZoneInfo
+              now = datetime.now(ZoneInfo('Europe/Prague')).replace(tzinfo=None)
+          except Exception:
+              now = datetime.utcnow() + timedelta(hours=1)
+
+          RESULT_RE = re.compile(r'^\d+:\d+(p|sn)?$')
+          refresh = 'false'
+
+          try:
+              with open('export_ceskyhokej_all.csv', 'rb') as f:
+                  text = f.read().decode('windows-1250')
+              for line in text.strip().split('\n')[1:]:
+                  cols = line.strip().split(';')
+                  if len(cols) < 9:
+                      continue
+                  try:
+                      d, m, y = cols[1].split('.')
+                      h, mi = cols[2].split(':')
+                      game_dt = datetime(int(y), int(m), int(d), int(h), int(mi))
+                  except Exception:
+                      continue
+                  delta = (now - game_dt).total_seconds()
+                  # In-progress: started up to 3 h ago, no result yet
+                  if 0 <= delta <= 10800 and not RESULT_RE.match(cols[8].strip()):
+                      refresh = 'true'
+                      break
+          except FileNotFoundError:
+              refresh = 'true'  # first run — always fetch
+
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write(f'refresh={refresh}\n')
+          print(f'refresh={refresh}')
+          PYEOF
+          python3 /tmp/check_games.py
+
+      - name: Fetch fresh CSV from ceskyhokej.cz
+        if: steps.check.outputs.refresh == 'true'
+        run: |
+          curl -f -s -o /tmp/fresh.csv \
+            "https://zapasy.ceskyhokej.cz/admin/schedule/dashboard/export?filter%5Bseason%5D=2025&filter%5BmanagingAuthorities%5D=all&filter%5Bregion%5D=all&filter%5Bteam%5D=all&filter%5BtimeShortcut%5D=this-season&filter%5Bleague%5D=part_3244&filter%5Bnumber%5D=&filter%5Bstadium%5D=all&filter%5Bstate%5D=&filter%5BteamType%5D=all&filter%5Bsort%5D=&filter%5Bdirection%5D=ASC"
+
+      - name: Commit if CSV changed
+        if: steps.check.outputs.refresh == 'true'
+        run: |
+          if [ -f export_ceskyhokej_all.csv ] && diff -q export_ceskyhokej_all.csv /tmp/fresh.csv > /dev/null 2>&1; then
+            echo "CSV unchanged, nothing to commit"
+            exit 0
+          fi
+
+          cp /tmp/fresh.csv export_ceskyhokej_all.csv
+          date -u +'%Y-%m-%dT%H:%M:%SZ' > last_updated.txt
+
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git add export_ceskyhokej_all.csv last_updated.txt
+          git commit -m "chore: update CSV $(date -u +'%Y-%m-%d %H:%M UTC')"
+          git push
