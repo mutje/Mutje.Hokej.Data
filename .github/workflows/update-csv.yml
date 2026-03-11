@@ -45,8 +45,8 @@ jobs:
                   except Exception:
                       continue
                   delta = (now - game_dt).total_seconds()
-                  # In-progress: started up to 3 h ago, no result yet
-                  if 0 <= delta <= 10800 and not RESULT_RE.match(cols[8].strip()):
+                  # In-progress: started up to 24 h ago, no result yet
+                  if 0 <= delta <= 86400 and not RESULT_RE.match(cols[8].strip()):
                       refresh = 'true'
                       break
           except FileNotFoundError:
